@@ -1,10 +1,11 @@
 import { verifyWebhookSignature } from "../plans/lib/stripe.ts";
+import { getSupabaseClient } from "./lib/supabase.ts";
 import { StripeSubscription } from "./lib/types.ts";
 
 // Constantes para tipos de eventos do Stripe
 const STRIPE_EVENTS = {
-  SUBISCRIPTION_CREATED: "subscription.created",
-  SUBISCRIPTION_UPDATED: "subscription.updated",
+  SUBISCRIPTION_CREATED: "customer.subscription.created",
+  SUBISCRIPTION_UPDATED: "customer.subscription.updated",
 };
 
 // Constantes para tabelas do Supabase
@@ -30,6 +31,8 @@ function timestampToISOString(
  * @returns Resposta HTTP
  */
 async function handleWebhookRequest(request: Request): Promise<Response> {
+  const supabase = getSupabaseClient();
+
   try {
     // Verificar cabeçalho de assinatura
     const signature = request.headers.get("Stripe-Signature");
@@ -52,7 +55,37 @@ async function handleWebhookRequest(request: Request): Promise<Response> {
     ) {
       const subscritpion = event.data.object as StripeSubscription;
 
-      console.log(subscritpion);
+      const { data, error } = await supabase
+        .from(TABLES.SUBISCRIPTION)
+        .upsert({
+          stripe_id: "sub_1RDA6eCIHU4WlgDDT7QpYUCE",
+          customer_id: "b1ee4a87-a16a-4c17-a184-60dfc691060a",
+          plan_id: "81986055-6cf9-4574-9e43-0d38df4c66c7",
+          status: subscritpion.status,
+          billing_cycle_anchor: timestampToISOString(
+            subscritpion.billing_cycle_anchor,
+          ),
+          current_period_start: timestampToISOString(
+            subscritpion.items.data[0].current_period_start,
+          ),
+          current_period_end: timestampToISOString(
+            subscritpion.items.data[0].current_period_end,
+          ),
+          cancel_at: timestampToISOString(subscritpion.cancel_at),
+          canceled_at: timestampToISOString(subscritpion.cancel_at),
+          cancel_at_period_end: subscritpion.cancel_at_period_end,
+          created_at: timestampToISOString(subscritpion.created),
+        }, { onConflict: "stripe_id" })
+        .select()
+        .single();
+
+      if (error) {
+        console.error(error);
+      }
+
+      if (data) {
+        console.info(data);
+      }
     }
 
     // Retornar sucesso

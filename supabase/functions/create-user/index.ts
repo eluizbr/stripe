@@ -1,58 +1,36 @@
-// Setup type definitions for built-in Supabase Runtime APIs
 import Stripe from "https://esm.sh/stripe@14.25.0?target=denonext";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { getSupabaseClient } from "./lib/supabase.ts";
 
-// Tipos para melhorar a segurança do código
-interface UserRecord {
-  id: string;
-  email: string;
-  name?: string;
-}
-
-interface WebhookPayload {
-  record: UserRecord;
-  type: string;
-  table: string;
-}
-
-// Constantes e configuração
-const STRIPE_API_KEY = Deno.env.get("STRIPE_API_KEY");
-if (!STRIPE_API_KEY) {
-  throw new Error("STRIPE_API_KEY environment variable is required");
-}
-
-// Inicializa o cliente Stripe
-const stripe = new Stripe(STRIPE_API_KEY, {
+// Inicializa Stripe
+const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") || "", {
   httpClient: Stripe.createFetchHttpClient(),
 });
 
-/**
- * Webhook handler para criar um cliente Stripe quando um novo usuário é registrado
- * Espera um payload do Supabase com informações do usuário
- */
+// Handler principal
 Deno.serve(async (req) => {
-  // Verificar método HTTP
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Método não permitido" }, 405);
+    return new Response(
+      JSON.stringify({ error: "Método não permitido" }),
+      { status: 405, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   try {
-    // Extrair e validar o corpo da requisição
-    const body = await req.json() as WebhookPayload;
+    const body = await req.json();
+    const userId = body?.record?.id;
+    const email = body?.record?.email;
 
-    if (!body?.record?.id || !body?.record?.email) {
-      return jsonResponse({
-        error: "Dados de usuário inválidos ou incompletos",
-      }, 400);
+    if (!userId || !email) {
+      return new Response(
+        JSON.stringify({ error: "Dados inválidos" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
     }
 
-    const { id: userId, email, name = "" } = body.record;
-
-    // Obter cliente Supabase
     const supabase = getSupabaseClient();
 
-    // Verificar se o cliente já existe para evitar duplicação
+    // Verificar cliente existente
     const { data: existingCustomer } = await supabase
       .from("customers")
       .select("stripe_id")
@@ -60,66 +38,52 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existingCustomer?.stripe_id) {
-      return jsonResponse({
-        message: "Cliente Stripe já existe para este usuário",
-        stripe_id: existingCustomer.stripe_id,
-      });
+      return new Response(
+        JSON.stringify({
+          message: "Cliente já existe",
+          stripe_id: existingCustomer.stripe_id,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
     }
 
     // Criar cliente no Stripe
     const stripeCustomer = await stripe.customers.create({
-      name,
       email,
-      metadata: {
-        user_id: userId,
-      },
+      name: body?.record?.name,
+      metadata: { user_id: userId },
     });
 
-    // Salvar referência no Supabase
+    // Salvar no Supabase
     const { data, error } = await supabase
       .from("customers")
       .insert({
         email,
         user_id: userId,
+        name: body?.record?.name,
         stripe_id: stripeCustomer.id,
         created_at: new Date().toISOString(),
       })
       .select()
       .single();
 
-    if (error) {
-      // Em caso de erro no Supabase, devemos limpar o cliente Stripe
-      console.error("Erro ao inserir dados no Supabase:", error);
-      await stripe.customers.del(stripeCustomer.id);
-      return jsonResponse({ error: error.message }, 500);
-    }
+    if (error) throw error;
 
-    return jsonResponse({
-      message: "Cliente Stripe criado com sucesso",
-      customer: data,
-    });
+    return new Response(
+      JSON.stringify({
+        message: "Cliente criado com sucesso",
+        customer: data,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
   } catch (error) {
-    console.error("Erro ao processar a requisição:", error);
-    const errorMessage = error instanceof Error
-      ? error.message
-      : "Erro desconhecido";
-
-    return jsonResponse({
-      error: "Erro interno do servidor",
-      details: errorMessage,
-    }, 500);
+    console.error(error);
+    return new Response(
+      JSON.stringify({
+        error: "Erro interno",
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
   }
 });
-
-/**
- * Função auxiliar para criar respostas JSON consistentes
- */
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
-}

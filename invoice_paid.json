@@ -1,0 +1,163 @@
+{
+  "id": "in_1RDCjBCIHU4WlgDD495B0cPj",
+  "object": "invoice",
+  "account_country": "BR",
+  "account_name": "Área restrita de eluizbr.dev",
+  "account_tax_ids": null,
+  "amount_due": 999900,
+  "amount_overpaid": 0,
+  "amount_paid": 999900,
+  "amount_remaining": 0,
+  "amount_shipping": 0,
+  "application": null,
+  "attempt_count": 0,
+  "attempted": true,
+  "auto_advance": false,
+  "automatic_tax": {
+    "disabled_reason": null,
+    "enabled": false,
+    "liability": null,
+    "status": null
+  },
+  "automatically_finalizes_at": null,
+  "billing_reason": "subscription_create",
+  "collection_method": "charge_automatically",
+  "created": 1744497645,
+  "currency": "brl",
+  "custom_fields": null,
+  "customer": "cus_S7RcQrjknSaOU0",
+  "customer_address": {
+    "city": "Belo Horizonte",
+    "country": "BR",
+    "line1": "Rua Ramalhete, 191",
+    "line2": "apto 103, Serra",
+    "postal_code": "30310-310",
+    "state": "MG"
+  },
+  "customer_email": "eluizbr@gmail.com",
+  "customer_name": "Emerson Reis",
+  "customer_phone": "+5531994100792",
+  "customer_shipping": null,
+  "customer_tax_exempt": "none",
+  "customer_tax_ids": [],
+  "default_payment_method": null,
+  "default_source": null,
+  "default_tax_rates": [],
+  "description": null,
+  "discounts": [],
+  "due_date": null,
+  "effective_at": 1744497644,
+  "ending_balance": 0,
+  "footer": null,
+  "from_invoice": null,
+  "hosted_invoice_url": "https://invoice.stripe.com/i/acct_1R9omHCIHU4WlgDD/test_YWNjdF8xUjlvbUhDSUhVNFdsZ0RELF9TN1Jja09TS3hSbGdPUjhtODVJYVVpWUgzODFRTTVlLDEzNTAzODQ0Nw0200JEclE4Pk?s=ap",
+  "invoice_pdf": "https://pay.stripe.com/invoice/acct_1R9omHCIHU4WlgDD/test_YWNjdF8xUjlvbUhDSUhVNFdsZ0RELF9TN1Jja09TS3hSbGdPUjhtODVJYVVpWUgzODFRTTVlLDEzNTAzODQ0Nw0200JEclE4Pk/pdf?s=ap",
+  "issuer": {
+    "type": "self"
+  },
+  "last_finalization_error": null,
+  "latest_revision": null,
+  "lines": {
+    "object": "list",
+    "data": [
+      {
+        "id": "il_1RDCjACIHU4WlgDDCxYRxCzA",
+        "object": "line_item",
+        "amount": 999900,
+        "currency": "brl",
+        "description": "1 × Plano Automação Premium (at R$ 9,999.00 / month)",
+        "discount_amounts": [],
+        "discountable": true,
+        "discounts": [],
+        "invoice": "in_1RDCjBCIHU4WlgDD495B0cPj",
+        "livemode": false,
+        "metadata": {},
+        "parent": {
+          "invoice_item_details": null,
+          "subscription_item_details": {
+            "invoice_item": null,
+            "proration": false,
+            "proration_details": {
+              "credited_items": null
+            },
+            "subscription": "sub_1RDCjBCIHU4WlgDDadC2AcW9",
+            "subscription_item": "si_S7Rc7UDe1JLNrk"
+          },
+          "type": "subscription_item_details"
+        },
+        "period": {
+          "end": 1747089644,
+          "start": 1744497644
+        },
+        "pretax_credit_amounts": [],
+        "pricing": {
+          "price_details": {
+            "price_details": "price_1RDBmBCIHU4WlgDDj2tneCbg",
+            "product": "prod_S7QdH3vD4v9M9D"
+          },
+          "type": "price_details",
+          "unit_amount_decimal": "999900"
+        },
+        "quantity": 1,
+        "taxes": []
+      }
+    ],
+    "has_more": false,
+    "total_count": 1,
+    "url": "/v1/invoices/in_1RDCjBCIHU4WlgDD495B0cPj/lines"
+  },
+  "livemode": false,
+  "metadata": {},
+  "next_payment_attempt": null,
+  "number": "2AEF4F36-0001",
+  "on_behalf_of": null,
+  "parent": {
+    "quote_details": null,
+    "subscription_details": {
+      "metadata": {},
+      "subscription": "sub_1RDCjBCIHU4WlgDDadC2AcW9"
+    },
+    "type": "subscription_details"
+  },
+  "payment_settings": {
+    "default_mandate": null,
+    "payment_method_options": {
+      "acss_debit": null,
+      "bancontact": null,
+      "card": {
+        "request_three_d_secure": "automatic"
+      },
+      "customer_balance": null,
+      "konbini": null,
+      "sepa_debit": null,
+      "us_bank_account": null
+    },
+    "payment_method_types": null
+  },
+  "period_end": 1744497644,
+  "period_start": 1744497644,
+  "post_payment_credit_notes_amount": 0,
+  "pre_payment_credit_notes_amount": 0,
+  "receipt_number": null,
+  "rendering": null,
+  "shipping_cost": null,
+  "shipping_details": null,
+  "starting_balance": 0,
+  "statement_descriptor": null,
+  "status": "paid",
+  "status_transitions": {
+    "finalized_at": 1744497644,
+    "marked_uncollectible_at": null,
+    "paid_at": 1744497644,
+    "voided_at": null
+  },
+  "subtotal": 999900,
+  "subtotal_excluding_tax": 999900,
+  "test_clock": null,
+  "total": 999900,
+  "total_discount_amounts": [],
+  "total_excluding_tax": 999900,
+  "total_pretax_credit_amounts": [],
+  "total_taxes": [],
+  "webhooks_delivered_at": null
+}

@@ -1,172 +1,230 @@
 import { verifyWebhookSignature } from "./lib/stripe.ts";
 import { getSupabaseClient } from "./lib/supabase.ts";
-import { StripeCustomer, StripeInvoice } from "./lib/types.ts";
+import { StripeCustomer, StripePlan, StripeSubscription } from "./lib/types.ts";
 
-// Enums para tipos de eventos e tabelas
-enum StripeEvent {
-  INVOICE_CREATED = "invoice.created",
-  INVOICE_UPDATED = "invoice.updated",
-  CUSTOMER_UPDATED = "customer.updated",
+/**
+ * Enum para tipos de eventos Stripe suportados
+ */
+enum StripeEventType {
+  SUBSCRIPTION_CREATED = "customer.subscription.created",
+  SUBSCRIPTION_UPDATED = "customer.subscription.updated",
+  SUBSCRIPTION_DELETED = "customer.subscription.deleted",
 }
 
+/**
+ * Enum para tabelas do Supabase
+ */
 enum Table {
   CUSTOMERS = "customers",
   INVOICES = "invoices",
   PRODUCTS = "products",
+  PLANS = "plans",
+  SUBSCRIPTIONS = "subscriptions",
 }
 
-// Funções utilitárias
-const toISOString = (timestamp?: number | null) =>
+/**
+ * Converte timestamp Unix para string ISO
+ * @param timestamp - Timestamp em segundos (formato Unix)
+ * @returns String ISO ou null se timestamp for undefined/null
+ */
+const toISOString = (timestamp?: number | null): string | null =>
   timestamp ? new Date(timestamp * 1000).toISOString() : null;
 
+/**
+ * Cria uma resposta HTTP padronizada
+ * @param ok - Indica se a operação foi bem-sucedida
+ * @param message - Mensagem informativa
+ * @param status - Código de status HTTP (default: 200 para ok=true, 500 para ok=false)
+ * @returns Objeto Response formatado
+ */
 const createResponse = (
   ok: boolean,
   message: string,
   status = ok ? 200 : 500,
-) =>
+): Response =>
   new Response(
     JSON.stringify({ ok, message }),
     { status, headers: { "Content-Type": "application/json" } },
   );
 
 /**
- * Função principal para responder ao webhook
+ * Busca informações do cliente no Supabase pelo ID do Stripe
+ * @param supabase - Cliente Supabase
+ * @param customerId - ID do cliente no Stripe
+ * @returns Dados do cliente ou null se não encontrado
+ * @throws Erro se ocorrer falha na consulta
+ */
+async function getCustomer(
+  supabase: any,
+  customerId: string,
+): Promise<StripeCustomer | null> {
+  // Usando maybeSingle() em vez de single() para permitir que nenhum resultado seja retornado
+  const { data, error } = await supabase
+    .from(Table.CUSTOMERS)
+    .select()
+    .eq("stripe_id", customerId)
+    .maybeSingle();
+
+  if (error) {
+    // Erro real de banco de dados
+    throw new Error(`Falha ao buscar cliente: ${error.message}`);
+  }
+
+  // data será null se nenhum cliente for encontrado
+  return data;
+}
+
+/**
+ * Busca informações do plano no Supabase pelo ID do Stripe
+ * @param supabase - Cliente Supabase
+ * @param planId - ID do plano no Stripe
+ * @returns Dados do plano ou null se não encontrado
+ * @throws Erro se ocorrer falha na consulta
+ */
+async function getPlan(
+  supabase: any,
+  planId: string,
+): Promise<StripePlan | null> {
+  // Usando maybeSingle() em vez de single() para permitir que nenhum resultado seja retornado
+  const { data, error } = await supabase
+    .from(Table.PLANS)
+    .select()
+    .eq("stripe_id", planId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao buscar plano: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Processa eventos de assinatura (criação/atualização)
+ * @param supabase - Cliente Supabase
+ * @param subscription - Objeto de assinatura do Stripe
+ * @throws Erro se ocorrer falha no processamento
+ */
+async function processSubscriptionEvent(
+  supabase: any,
+  subscription: StripeSubscription,
+): Promise<void> {
+  // Buscar dados relacionados
+  const customer = await getCustomer(supabase, subscription.customer);
+  const plan = await getPlan(supabase, subscription.plan.id);
+
+  // Log para depuração
+  console.log(
+    `Cliente: ${
+      customer ? "encontrado" : "não encontrado"
+    }, ID Stripe: ${subscription.customer}`,
+  );
+  console.log(
+    `Plano: ${
+      plan ? "encontrado" : "não encontrado"
+    }, ID Stripe: ${subscription.plan.id}`,
+  );
+
+  // Se cliente ou plano não forem encontrados, registramos o evento mas não processamos
+  if (!customer) {
+    console.warn(
+      `Webhook ignorado: Cliente não encontrado para ID Stripe: ${subscription.customer}`,
+    );
+    return; // Retorna sem erro para não reprocessar o webhook
+  }
+
+  if (!plan) {
+    console.warn(
+      `Webhook ignorado: Plano não encontrado para ID Stripe: ${subscription.plan.id}`,
+    );
+    return; // Retorna sem erro para não reprocessar o webhook
+  }
+  console.log(subscription);
+  // Inserir ou atualizar a assinatura
+  const { error } = await supabase
+    .from(Table.SUBSCRIPTIONS)
+    .upsert({
+      customer_id: customer.id,
+      stripe_id: subscription.id,
+      plan_id: plan.id,
+      default_payment_method: subscription.default_payment_method,
+      billing_cycle_anchor: toISOString(subscription.billing_cycle_anchor),
+      cancel_at: toISOString(subscription.cancel_at),
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      ended_at: toISOString(subscription.ended_at),
+      cancellation_details: subscription.cancellation_details,
+      collection_method: subscription.collection_method,
+      currency: subscription.currency,
+      description: subscription.description,
+      quantity: subscription.quantity, // Corrigido "qauntity" para "quantity"
+      status: subscription.status,
+      created: toISOString(subscription.created),
+    }, { onConflict: "stripe_id" });
+
+  if (error) {
+    throw new Error(`Falha ao atualizar assinatura: ${error.message}`);
+  }
+}
+
+/**
+ * Manipulador principal do webhook Stripe
+ * @param request - Objeto de requisição HTTP
+ * @returns Resposta HTTP
  */
 async function handleWebhookRequest(request: Request): Promise<Response> {
   const supabase = getSupabaseClient();
+  let eventData: string;
 
   try {
-    // Verificar assinatura
+    // Capturar corpo da requisição antes de processar
+    eventData = await request.text();
+
+    // Verificar assinatura do webhook
     const signature = request.headers.get("Stripe-Signature");
     if (!signature) {
       return createResponse(false, "Cabeçalho Stripe-Signature ausente", 400);
     }
 
-    // Obter e verificar evento
-    const event = await verifyWebhookSignature(await request.text(), signature);
-    console.log(`Processando evento: ${event.type}`);
+    // Verificar e analisar o evento
+    const event = await verifyWebhookSignature(eventData, signature);
 
-    // Processar diferentes tipos de eventos
-    if (event.type === StripeEvent.CUSTOMER_UPDATED) {
-      await processCustomerEvent(supabase, event.data.object as StripeCustomer);
-    } else if (
-      [StripeEvent.INVOICE_CREATED, StripeEvent.INVOICE_UPDATED].includes(
-        event.type,
-      )
-    ) {
-      await processInvoiceEvent(supabase, event.data.object as StripeInvoice);
+    // Processar com base no tipo de evento
+    switch (event.type) {
+      case StripeEventType.SUBSCRIPTION_CREATED:
+      case StripeEventType.SUBSCRIPTION_UPDATED:
+      case StripeEventType.SUBSCRIPTION_DELETED:
+        await processSubscriptionEvent(
+          supabase,
+          event.data.object as StripeSubscription,
+        );
+        return createResponse(
+          true,
+          `Evento ${event.type} processado com sucesso`,
+        );
+
+      default:
+        // Tipo de evento não tratado
+        return createResponse(
+          true,
+          `Evento ${event.type} ignorado (não configurado)`,
+        );
     }
-
-    return createResponse(true, "Evento processado com sucesso");
   } catch (error) {
+    // Log detalhado do erro para diagnóstico
     console.error(
-      "Erro:",
+      "Erro ao processar webhook:",
       error instanceof Error ? error.message : String(error),
+      error instanceof Error && error.stack ? error.stack : "",
     );
-    return createResponse(false, "Erro ao processar o evento");
+
+    return createResponse(
+      false,
+      `Erro ao processar evento: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`,
+      500,
+    );
   }
-}
-
-/**
- * Processa evento de atualização de cliente
- */
-async function processCustomerEvent(
-  supabase: any,
-  customer: StripeCustomer,
-): Promise<void> {
-  if (!customer.email) throw new Error("Email do cliente não fornecido");
-
-  const { error } = await supabase
-    .from(Table.CUSTOMERS)
-    .update({
-      email: customer.email,
-      name: customer.name,
-      phone: customer.phone,
-      address: customer.address,
-    })
-    .eq("email", customer.email);
-
-  if (error) throw new Error(`Falha ao atualizar cliente: ${error.message}`);
-}
-
-/**
- * Processa evento de fatura
- */
-async function processInvoiceEvent(
-  supabase: any,
-  invoice: StripeInvoice,
-): Promise<void> {
-  // Validar dados essenciais
-  const productId = invoice.lines.data[0]?.pricing?.price_details?.product;
-  if (!productId) throw new Error("ID do produto não encontrado");
-  if (!invoice.customer_email) {
-    throw new Error("Email do cliente não encontrado");
-  }
-
-  // Buscar dados necessários
-  const { data: product, error: productError } = await supabase
-    .from(Table.PRODUCTS)
-    .select("id")
-    .eq("stripe_id", productId)
-    .single();
-
-  if (productError || !product) throw new Error("Produto não encontrado");
-
-  const { data: customer, error: customerError } = await supabase
-    .from(Table.CUSTOMERS)
-    .select("id")
-    .eq("email", invoice.customer_email)
-    .single();
-
-  if (customerError || !customer) throw new Error("Cliente não encontrado");
-
-  // Atualizar cliente
-  await updateCustomer(supabase, customer.id, invoice);
-
-  // Atualizar fatura
-  const { error } = await supabase
-    .from(Table.INVOICES)
-    .upsert({
-      stripe_id: invoice.id,
-      product_id: product.id,
-      status: invoice.status,
-      amount_due: invoice.amount_due,
-      amount_paid: invoice.amount_paid,
-      total: invoice.total,
-      total_excluding_tax: invoice.total_excluding_tax || invoice.total,
-      subtotal_excluding_tax: invoice.subtotal_excluding_tax ||
-        invoice.subtotal,
-      currency: invoice.currency,
-      period_start: toISOString(invoice.period_start),
-      period_end: toISOString(invoice.period_end),
-      quantity: invoice.lines.data[0]?.quantity || 1,
-      created: toISOString(invoice.created),
-      customer_id: customer.id,
-    }, { onConflict: "stripe_id" });
-
-  if (error) throw new Error(`Falha ao atualizar fatura: ${error.message}`);
-}
-
-/**
- * Atualiza os dados do cliente
- */
-async function updateCustomer(
-  supabase: any,
-  customerId: string,
-  invoice: StripeInvoice,
-): Promise<void> {
-  const { error } = await supabase
-    .from(Table.CUSTOMERS)
-    .update({
-      stripe_id: invoice.customer,
-      email: invoice.customer_email,
-      name: invoice.customer_name,
-      phone: invoice.customer_phone,
-      address: invoice.customer_address,
-    })
-    .eq("id", customerId);
-
-  if (error) throw new Error(`Falha ao atualizar cliente: ${error.message}`);
 }
 
 // Exporta o handler para o serviço Deno

@@ -287,6 +287,7 @@ export interface InvoiceSettings {
 }
 
 export interface StripeCustomer {
+  user_id: any;
   id: string;
   object: string;
   address: CustomerAddress | null;

@@ -63,7 +63,7 @@ async function getCustomer(
     .from(Table.CUSTOMERS)
     .select()
     .eq("stripe_id", customerId)
-    .maybeSingle();
+    .single();
 
   if (error) {
     // Erro real de banco de dados
@@ -90,7 +90,7 @@ async function getPlan(
     .from(Table.PLANS)
     .select()
     .eq("stripe_id", planId)
-    .maybeSingle();
+    .single();
 
   if (error) {
     throw new Error(`Falha ao buscar plano: ${error.message}`);
@@ -139,12 +139,12 @@ async function processSubscriptionEvent(
     );
     return; // Retorna sem erro para não reprocessar o webhook
   }
-  console.log(subscription);
+
   // Inserir ou atualizar a assinatura
   const { error } = await supabase
     .from(Table.SUBSCRIPTIONS)
     .upsert({
-      customer_id: customer.id,
+      customer_id: customer?.user_id,
       stripe_id: subscription.id,
       plan_id: plan.id,
       default_payment_method: subscription.default_payment_method,

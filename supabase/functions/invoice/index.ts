@@ -114,7 +114,7 @@ async function processInvoiceEvent(
 
   const { data: customer, error: customerError } = await supabase
     .from(Table.CUSTOMERS)
-    .select("id")
+    .select()
     .eq("email", invoice.customer_email)
     .single();
 
@@ -123,7 +123,7 @@ async function processInvoiceEvent(
   // Atualizar cliente
   await updateCustomer(supabase, customer.id, invoice);
 
-  console.log(invoice);
+  console.log("INVOICE:", invoice.id, invoice.status);
   // Atualizar fatura
   const { error } = await supabase
     .from(Table.INVOICES)
@@ -142,7 +142,7 @@ async function processInvoiceEvent(
       period_end: toISOString(invoice.period_end),
       quantity: invoice.lines.data[0]?.quantity || 1,
       created: toISOString(invoice.created),
-      customer_id: customer.id,
+      customer_id: customer.user_id,
       subscription_id: invoice.lines.data[0]?.parent.subscription_item_details
         .subscription,
     }, { onConflict: "stripe_id" });

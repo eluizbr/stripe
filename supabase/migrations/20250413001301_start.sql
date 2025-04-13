@@ -8,11 +8,35 @@ create table "public"."customers" (
     "stripe_id" text,
     "user_id" uuid,
     "created_at" timestamp with time zone default now(),
-    "updated_at" timestamp with time zone default now()
+    "updated_at" timestamp with time zone default now(),
+    "address" jsonb,
+    "phone" text
 );
 
 
 alter table "public"."customers" enable row level security;
+
+create table "public"."invoices" (
+    "id" uuid not null default gen_random_uuid(),
+    "stripe_id" text,
+    "product_id" uuid default gen_random_uuid(),
+    "status" text,
+    "amount_due" integer,
+    "amount_paid" integer,
+    "total" bigint,
+    "total_excluding_tax" bigint,
+    "subtotal_excluding_tax" integer,
+    "currency" text,
+    "period_start" timestamp with time zone,
+    "period_end" timestamp with time zone,
+    "quantity" integer default 0,
+    "created" timestamp with time zone,
+    "updated" timestamp with time zone,
+    "customer_id" uuid
+);
+
+
+alter table "public"."invoices" enable row level security;
 
 create table "public"."plans" (
     "id" uuid not null default gen_random_uuid(),
@@ -49,6 +73,10 @@ CREATE UNIQUE INDEX customers_pkey ON public.customers USING btree (id);
 
 CREATE UNIQUE INDEX customers_stripe_id_key ON public.customers USING btree (stripe_id);
 
+CREATE UNIQUE INDEX invoice_pkey ON public.invoices USING btree (id);
+
+CREATE UNIQUE INDEX invoice_stripe_id_key ON public.invoices USING btree (stripe_id);
+
 CREATE UNIQUE INDEX plan_pkey ON public.plans USING btree (id);
 
 CREATE UNIQUE INDEX plan_stripe_id_key ON public.plans USING btree (stripe_id);
@@ -61,6 +89,8 @@ CREATE UNIQUE INDEX products_stripe_id_key ON public.products USING btree (strip
 
 alter table "public"."customers" add constraint "customers_pkey" PRIMARY KEY using index "customers_pkey";
 
+alter table "public"."invoices" add constraint "invoice_pkey" PRIMARY KEY using index "invoice_pkey";
+
 alter table "public"."plans" add constraint "plan_pkey" PRIMARY KEY using index "plan_pkey";
 
 alter table "public"."products" add constraint "product_pkey" PRIMARY KEY using index "product_pkey";
@@ -72,6 +102,16 @@ alter table "public"."customers" add constraint "customers_stripe_id_key" UNIQUE
 alter table "public"."customers" add constraint "customers_user_id_fkey" FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE not valid;
 
 alter table "public"."customers" validate constraint "customers_user_id_fkey";
+
+alter table "public"."invoices" add constraint "invoice_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL not valid;
+
+alter table "public"."invoices" validate constraint "invoice_customer_id_fkey";
+
+alter table "public"."invoices" add constraint "invoice_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL not valid;
+
+alter table "public"."invoices" validate constraint "invoice_product_id_fkey";
+
+alter table "public"."invoices" add constraint "invoice_stripe_id_key" UNIQUE using index "invoice_stripe_id_key";
 
 alter table "public"."plans" add constraint "plan_stripe_id_key" UNIQUE using index "plan_stripe_id_key";
 
@@ -124,6 +164,48 @@ grant trigger on table "public"."customers" to "service_role";
 grant truncate on table "public"."customers" to "service_role";
 
 grant update on table "public"."customers" to "service_role";
+
+grant delete on table "public"."invoices" to "anon";
+
+grant insert on table "public"."invoices" to "anon";
+
+grant references on table "public"."invoices" to "anon";
+
+grant select on table "public"."invoices" to "anon";
+
+grant trigger on table "public"."invoices" to "anon";
+
+grant truncate on table "public"."invoices" to "anon";
+
+grant update on table "public"."invoices" to "anon";
+
+grant delete on table "public"."invoices" to "authenticated";
+
+grant insert on table "public"."invoices" to "authenticated";
+
+grant references on table "public"."invoices" to "authenticated";
+
+grant select on table "public"."invoices" to "authenticated";
+
+grant trigger on table "public"."invoices" to "authenticated";
+
+grant truncate on table "public"."invoices" to "authenticated";
+
+grant update on table "public"."invoices" to "authenticated";
+
+grant delete on table "public"."invoices" to "service_role";
+
+grant insert on table "public"."invoices" to "service_role";
+
+grant references on table "public"."invoices" to "service_role";
+
+grant select on table "public"."invoices" to "service_role";
+
+grant trigger on table "public"."invoices" to "service_role";
+
+grant truncate on table "public"."invoices" to "service_role";
+
+grant update on table "public"."invoices" to "service_role";
 
 grant delete on table "public"."plans" to "anon";
 

@@ -48,11 +48,11 @@ Deno.serve(async (req) => {
     }
 
     // Criar cliente no Stripe
-    const stripeCustomer = await stripe.customers.create({
-      email,
-      name: body?.record?.name,
-      metadata: { user_id: userId },
-    });
+    // const stripeCustomer = await stripe.customers.create({
+    //   email,
+    //   name: body?.record?.name,
+    //   metadata: { user_id: userId },
+    // });
 
     // Salvar no Supabase
     const { data, error } = await supabase
@@ -61,7 +61,6 @@ Deno.serve(async (req) => {
         email,
         user_id: userId,
         name: body?.record?.name,
-        stripe_id: stripeCustomer.id,
         created_at: new Date().toISOString(),
       })
       .select()
